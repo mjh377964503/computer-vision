@@ -3,17 +3,33 @@ let videoElement = null;
 
 export async function initCamera() {
   videoElement = document.getElementById('pip-video');
+  if (!videoElement) {
+    throw new Error('Camera module: #pip-video element not found in DOM');
+  }
 
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video: { width: 640, height: 480, facingMode: 'user' }
-  });
+  // Stop previous stream tracks if re-entering
+  if (videoElement.srcObject) {
+    videoElement.srcObject.getTracks().forEach(t => t.stop());
+  }
 
-  videoElement.srcObject = stream;
-  await videoElement.play();
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { width: 640, height: 480, facingMode: 'user' }
+    });
 
-  return videoElement;
+    videoElement.srcObject = stream;
+    await videoElement.play();
+
+    return videoElement;
+  } catch (err) {
+    videoElement = null;
+    throw new Error(`Camera access denied or unavailable: ${err.message}`);
+  }
 }
 
 export function getVideoElement() {
+  if (!videoElement) {
+    console.warn('getVideoElement() called before initCamera() completes — returning null');
+  }
   return videoElement;
 }
