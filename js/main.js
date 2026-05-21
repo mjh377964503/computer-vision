@@ -70,4 +70,10 @@ function cleanup() {
 
 window.addEventListener('beforeunload', cleanup);
 
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    resetGesture();
+  }
+});
+
 main().catch(console.error);
