@@ -5,5 +5,17 @@ export function updatePIP(videoElement) {
 }
 
 export function setLoading(visible) {
-  // Optional: show/hide loading indicator
+  let el = document.getElementById('loading-indicator');
+  if (visible) {
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'loading-indicator';
+      el.textContent = 'Loading...';
+      el.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);font-size:1.5rem;color:#fff;z-index:9999;';
+      document.body.appendChild(el);
+    }
+    el.style.display = '';
+  } else if (el) {
+    el.style.display = 'none';
+  }
 }
