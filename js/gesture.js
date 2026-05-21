@@ -1,9 +1,10 @@
 // Rule-based gesture classifier from MediaPipe 21 hand landmarks
-// Landmarks: 0=wrist, 4/8/12/16/20=fingertips, 5/9/13/17=knuckles
+// Landmarks: 0=wrist, 4/8/12/16/20=fingertips, 2/5/9/13/17=MCP joints
 
 const FINGER_EXTEND_RATIO = 1.3;
 const DEBOUNCE_FRAMES = 6;
 const MOVE_THRESHOLD = 0.03; // normalized coord threshold for hand movement
+const THUMBS_UP_Y_THRESHOLD = 0.02;
 
 let gestureBuffer = [];
 let currentGesture = 'drag';
@@ -22,11 +23,11 @@ function isFingerExtended(landmarks, tipIdx, knuckleIdx) {
 
 function classify(landmarks) {
   const fingers = [
-    { tip: 4, knuckle: 5 },   // thumb
-    { tip: 8, knuckle: 9 },   // index
-    { tip: 12, knuckle: 13 }, // middle
-    { tip: 16, knuckle: 17 }, // ring
-    { tip: 20, knuckle: 18 }, // pinky (knuckle approximated)
+    { tip: 4, knuckle: 2 },   // thumb (THUMB_MCP)
+    { tip: 8, knuckle: 5 },   // index (INDEX_MCP)
+    { tip: 12, knuckle: 9 },  // middle (MIDDLE_MCP)
+    { tip: 16, knuckle: 13 }, // ring (RING_MCP)
+    { tip: 20, knuckle: 17 }, // pinky (PINKY_MCP)
   ];
 
   const extended = fingers.map(f => isFingerExtended(landmarks, f.tip, f.knuckle));
@@ -35,7 +36,7 @@ function classify(landmarks) {
   const thumbTip = landmarks[4];
 
   // Thumbs up: only thumb extended AND pointing upward
-  if (extended[0] && extendedCount === 1 && thumbTip.y < wrist.y - 0.02) {
+  if (extended[0] && extendedCount === 1 && thumbTip.y < wrist.y - THUMBS_UP_Y_THRESHOLD) {
     return 'thumbsUp';
   }
 
@@ -62,7 +63,7 @@ function classify(landmarks) {
     }
   }
 
-  return currentGesture !== 'none' ? currentGesture : 'drag';
+  return currentGesture;
 }
 
 export function updateGesture(landmarks) {
