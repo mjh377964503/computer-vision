@@ -3,8 +3,10 @@ import * as THREE from 'three';
 const PARTICLE_COUNT = 3000;
 const TRANSITION_DURATION = 0.4; // seconds
 
-let scene, camera, renderer, points, geometry;
+let scene, camera, renderer, points, geometry, material;
 let positions, colors, velocities;
+let previousColors;
+let onResize;
 let clock = new THREE.Clock();
 
 // Each particle's metadata for state behaviors
@@ -35,6 +37,7 @@ export function initParticles(canvas) {
   geometry = new THREE.BufferGeometry();
   positions = new Float32Array(PARTICLE_COUNT * 3);
   colors = new Float32Array(PARTICLE_COUNT * 3);
+  previousColors = new Float32Array(PARTICLE_COUNT * 3);
   velocities = new Float32Array(PARTICLE_COUNT * 3);
 
   // Initialize particles in random positions within view
@@ -62,6 +65,7 @@ export function initParticles(canvas) {
       dragOffsetX: 0,
       dragOffsetY: 0,
       dragOffsetZ: 0,
+      offsetCaptured: false,
     });
   }
 
@@ -69,7 +73,7 @@ export function initParticles(canvas) {
   geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 
   // Point material
-  const material = new THREE.PointsMaterial({
+  material = new THREE.PointsMaterial({
     size: 3,
     vertexColors: true,
     blending: THREE.AdditiveBlending,
@@ -82,11 +86,12 @@ export function initParticles(canvas) {
   scene.add(points);
 
   // Handle resize
-  window.addEventListener('resize', () => {
+  onResize = () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
-  });
+  };
+  window.addEventListener('resize', onResize);
 }
 
 export function updateParticles(gestureInfo) {
@@ -99,6 +104,8 @@ export function updateParticles(gestureInfo) {
     currentState = gestureInfo.gesture;
     stateTime = 0;
     transitionProgress = 0;
+    // Snapshot current colors for transition blending
+    previousColors.set(colors);
   }
 
   // Reset drag offsets when re-entering drag state
@@ -107,6 +114,7 @@ export function updateParticles(gestureInfo) {
       particleData[i].dragOffsetX = 0;
       particleData[i].dragOffsetY = 0;
       particleData[i].dragOffsetZ = 0;
+      particleData[i].offsetCaptured = false;
     }
   }
 
@@ -159,9 +167,12 @@ function updateOrbit(dt, hp) {
 
     // Purple → pink based on radius
     const t = pd.orbitRadius / 150;
-    colors[i3] = 0.6 + t * 0.3;
-    colors[i3 + 1] = 0.1 + t * 0.3;
-    colors[i3 + 2] = 0.3 + (1 - t) * 0.5;
+    const targetR = 0.6 + t * 0.3;
+    const targetG = 0.1 + t * 0.3;
+    const targetB = 0.3 + (1 - t) * 0.5;
+    colors[i3] = previousColors[i3] + (targetR - previousColors[i3]) * transitionProgress;
+    colors[i3 + 1] = previousColors[i3 + 1] + (targetG - previousColors[i3 + 1]) * transitionProgress;
+    colors[i3 + 2] = previousColors[i3 + 2] + (targetB - previousColors[i3 + 2]) * transitionProgress;
   }
 }
 
@@ -203,9 +214,12 @@ function updateCollapse(dt, hp) {
 
     // White hot → cooling
     const heat = Math.max(0, 1 - elapsed / 2);
-    colors[i3] = heat * 1 + (1 - heat) * 0.6;
-    colors[i3 + 1] = heat * 0.8 + (1 - heat) * 0.1;
-    colors[i3 + 2] = heat * 0.4 + (1 - heat) * 0.6;
+    const targetR = heat * 1 + (1 - heat) * 0.6;
+    const targetG = heat * 0.8 + (1 - heat) * 0.1;
+    const targetB = heat * 0.4 + (1 - heat) * 0.6;
+    colors[i3] = previousColors[i3] + (targetR - previousColors[i3]) * transitionProgress;
+    colors[i3 + 1] = previousColors[i3 + 1] + (targetG - previousColors[i3 + 1]) * transitionProgress;
+    colors[i3 + 2] = previousColors[i3 + 2] + (targetB - previousColors[i3 + 2]) * transitionProgress;
   }
 }
 
@@ -228,11 +242,14 @@ function updateDualStream(dt, hp, gi) {
     const ty = hp.y + dirY * dist * 3;
     const tz = hp.z + dirZ * dist * 3;
 
-    lerpPosition(i3, tx, ty, tz, 0.03);
+    lerpPosition(i3, tx, ty, tz, 1 - Math.exp(-10 * dt));
 
-    colors[i3] = isIndex ? 0.7 : 0.4;
-    colors[i3 + 1] = 0.2;
-    colors[i3 + 2] = isIndex ? 0.4 : 0.8;
+    const targetR = isIndex ? 0.7 : 0.4;
+    const targetG = 0.2;
+    const targetB = isIndex ? 0.4 : 0.8;
+    colors[i3] = previousColors[i3] + (targetR - previousColors[i3]) * transitionProgress;
+    colors[i3 + 1] = previousColors[i3 + 1] + (targetG - previousColors[i3 + 1]) * transitionProgress;
+    colors[i3 + 2] = previousColors[i3 + 2] + (targetB - previousColors[i3 + 2]) * transitionProgress;
   }
 }
 
@@ -260,9 +277,12 @@ function updateSpray(dt, hp) {
 
     // Fade with height
     const fade = Math.max(0, 1 - pd.sprayLife / 2);
-    colors[i3] = 0.9 * fade;
-    colors[i3 + 1] = 0.7 * fade;
-    colors[i3 + 2] = 0.2 * fade;
+    const targetR = 0.9 * fade;
+    const targetG = 0.7 * fade;
+    const targetB = 0.2 * fade;
+    colors[i3] = previousColors[i3] + (targetR - previousColors[i3]) * transitionProgress;
+    colors[i3 + 1] = previousColors[i3 + 1] + (targetG - previousColors[i3 + 1]) * transitionProgress;
+    colors[i3 + 2] = previousColors[i3 + 2] + (targetB - previousColors[i3 + 2]) * transitionProgress;
   }
 }
 
@@ -272,10 +292,11 @@ function updateDrag(dt, hp) {
     const pd = particleData[i];
 
     // Store offset on first contact
-    if (pd.dragOffsetX === 0 && pd.dragOffsetY === 0) {
+    if (!pd.offsetCaptured) {
       pd.dragOffsetX = positions[i3] - hp.x;
       pd.dragOffsetY = positions[i3 + 1] - hp.y;
       pd.dragOffsetZ = positions[i3 + 2] - hp.z;
+      pd.offsetCaptured = true;
     }
 
     // Inertial follow with delay
@@ -285,9 +306,12 @@ function updateDrag(dt, hp) {
 
     lerpPosition(i3, tx, ty, tz, 0.02);
 
-    colors[i3] = 0.5;
-    colors[i3 + 1] = 0.3;
-    colors[i3 + 2] = 0.7;
+    const targetR = 0.5;
+    const targetG = 0.3;
+    const targetB = 0.7;
+    colors[i3] = previousColors[i3] + (targetR - previousColors[i3]) * transitionProgress;
+    colors[i3 + 1] = previousColors[i3 + 1] + (targetG - previousColors[i3 + 1]) * transitionProgress;
+    colors[i3 + 2] = previousColors[i3 + 2] + (targetB - previousColors[i3 + 2]) * transitionProgress;
   }
 }
 
@@ -299,4 +323,23 @@ function lerpPosition(i3, tx, ty, tz, factor) {
 
 export function getRenderer() {
   return renderer;
+}
+
+export function disposeParticles() {
+  if (onResize) {
+    window.removeEventListener('resize', onResize);
+    onResize = null;
+  }
+  if (renderer) {
+    renderer.dispose();
+    renderer = null;
+  }
+  if (geometry) {
+    geometry.dispose();
+    geometry = null;
+  }
+  if (material) {
+    material.dispose();
+    material = null;
+  }
 }
