@@ -101,6 +101,15 @@ export function updateParticles(gestureInfo) {
     transitionProgress = 0;
   }
 
+  // Reset drag offsets when re-entering drag state
+  if (currentState === 'drag' && prevState !== 'drag') {
+    for (let i = 0; i < PARTICLE_COUNT; i++) {
+      particleData[i].dragOffsetX = 0;
+      particleData[i].dragOffsetY = 0;
+      particleData[i].dragOffsetZ = 0;
+    }
+  }
+
   // Smooth transition progress
   if (transitionProgress < 1) {
     transitionProgress += dt / TRANSITION_DURATION;
