@@ -3,8 +3,6 @@ import { updateGesture, resetGesture } from './gesture.js';
 import { initParticles, updateParticles } from './particles.js';
 import { updatePIP, setLoading } from './ui.js';
 
-const { HandLandmarker, FilesetResolver } = window;
-
 let rafId = null;
 let handLandmarkerInstance = null;
 
@@ -21,7 +19,11 @@ async function main() {
   if (!canvas) throw new Error('Canvas element #particle-canvas not found');
   initParticles(canvas);
 
-  // 3. Init MediaPipe HandLandmarker
+  // 3. Init MediaPipe HandLandmarker (dynamic CDN import)
+  const { HandLandmarker, FilesetResolver } = await import(
+    'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18'
+  );
+
   const vision = await FilesetResolver.forVisionTasks(
     'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm'
   );
