@@ -1,3 +1,18 @@
+const GESTURE_LABELS = {
+  orbit: '旋转星云',
+  collapse: '聚拢炸裂',
+  peace: '双股粒子流',
+  thumbsUp: '向上喷射',
+  drag: '拖拽云团',
+};
+
+export function updateGestureLabel(gesture) {
+  const el = document.getElementById('gesture-label');
+  if (el) {
+    el.textContent = GESTURE_LABELS[gesture] || '';
+  }
+}
+
 // UI utilities — PIP window management
 export function updatePIP(videoElement) {
   // PIP video already positioned via CSS, no extra logic needed

@@ -1,7 +1,7 @@
 import { initCamera } from './camera.js';
 import { updateGesture, resetGesture } from './gesture.js';
 import { initParticles, updateParticles } from './particles.js';
-import { updatePIP, setLoading } from './ui.js';
+import { updatePIP, setLoading, updateGestureLabel } from './ui.js';
 
 let rafId = null;
 let handLandmarkerInstance = null;
@@ -51,8 +51,10 @@ async function main() {
     if (results.landmarks && results.landmarks.length > 0) {
       const gestureInfo = updateGesture(results.landmarks[0]);
       updateParticles(gestureInfo);
+      updateGestureLabel(gestureInfo.gesture);
     } else {
       resetGesture();
+      updateGestureLabel('');
     }
   }
 
