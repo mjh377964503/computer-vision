@@ -3,8 +3,7 @@
 
 const FINGER_EXTEND_RATIO = 1.3;
 const DEBOUNCE_FRAMES = 6;
-const MOVE_THRESHOLD = 0.03; // normalized coord threshold for hand movement
-const THUMBS_UP_Y_THRESHOLD = 0.02;
+const MOVE_THRESHOLD = 0.03;
 
 let gestureBuffer = [];
 let currentGesture = 'drag';
@@ -33,17 +32,6 @@ function classify(landmarks) {
   const extended = fingers.map(f => isFingerExtended(landmarks, f.tip, f.knuckle));
   const extendedCount = extended.filter(Boolean).length;
   const wrist = landmarks[0];
-  const thumbTip = landmarks[4];
-
-  // Thumbs up: only thumb extended AND pointing upward
-  if (extended[0] && extendedCount === 1 && thumbTip.y < wrist.y - THUMBS_UP_Y_THRESHOLD) {
-    return 'thumbsUp';
-  }
-
-  // Peace sign: index(1) + middle(2) extended, rest not
-  if (extended[1] && extended[2] && extendedCount === 2) {
-    return 'peace';
-  }
 
   // Open palm: all 5 extended
   if (extendedCount === 5) {
@@ -53,6 +41,26 @@ function classify(landmarks) {
   // Fist: none extended
   if (extendedCount === 0) {
     return 'collapse';
+  }
+
+  // Index + pinky = helix (check before peace, both have 2 extended)
+  if (extended[1] && extended[4] && extendedCount === 2) {
+    return 'helix';
+  }
+
+  // Index + middle = dual stream
+  if (extended[1] && extended[2] && extendedCount === 2) {
+    return 'peace';
+  }
+
+  // Index only = vortex (pointing)
+  if (extended[1] && extendedCount === 1) {
+    return 'vortex';
+  }
+
+  // Middle + ring + pinky = ripple (3 fingers)
+  if (extended[2] && extended[3] && extended[4] && extendedCount === 3) {
+    return 'ripple';
   }
 
   // Detect hand movement for drag mode

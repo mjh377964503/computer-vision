@@ -18,6 +18,11 @@ let prevState = 'drag';
 let stateTime = 0;
 let transitionProgress = 1; // 1 = fully in current state
 
+// Hand position trail for drag wake effect
+let handTrail = [];
+let prevHandPos = null;
+const TRAIL_LENGTH = 40;
+
 export function initParticles(canvas) {
   // Scene
   scene = new THREE.Scene();
@@ -61,7 +66,6 @@ export function initParticles(canvas) {
       orbitAngle: Math.random() * Math.PI * 2,
       orbitY: (Math.random() - 0.5) * 100,
       delay: Math.random() * 0.5,
-      sprayLife: Math.random(),
       dragOffsetX: 0,
       dragOffsetY: 0,
       dragOffsetZ: 0,
@@ -108,13 +112,22 @@ export function updateParticles(gestureInfo) {
     previousColors.set(colors);
   }
 
-  // Reset drag offsets when re-entering drag state
-  if (currentState === 'drag' && prevState !== 'drag') {
-    for (let i = 0; i < PARTICLE_COUNT; i++) {
-      particleData[i].dragOffsetX = 0;
-      particleData[i].dragOffsetY = 0;
-      particleData[i].dragOffsetZ = 0;
-      particleData[i].offsetCaptured = false;
+  // Reset state-specific data on transition
+  if (currentState !== prevState) {
+    if (currentState === 'drag') {
+      handTrail = [];
+      prevHandPos = null;
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        particleData[i].dragOffsetX = 0;
+        particleData[i].dragOffsetY = 0;
+        particleData[i].dragOffsetZ = 0;
+        particleData[i].offsetCaptured = false;
+      }
+    }
+    if (currentState === 'ripple') {
+      for (let i = 0; i < PARTICLE_COUNT; i++) {
+        particleData[i].delay = Math.random() * 2;
+      }
     }
   }
 
@@ -126,12 +139,20 @@ export function updateParticles(gestureInfo) {
 
   const hp = screenToWorld(gestureInfo.handPosition);
 
+  // Maintain hand trail for drag state
+  if (currentState === 'drag') {
+    handTrail.unshift({ x: hp.x, y: hp.y, z: hp.z });
+    if (handTrail.length > TRAIL_LENGTH) handTrail.pop();
+  }
+
   // Dispatch to current state behavior
   switch (currentState) {
     case 'orbit': updateOrbit(dt, hp); break;
     case 'collapse': updateCollapse(dt, hp); break;
     case 'peace': updateDualStream(dt, hp, gestureInfo); break;
-    case 'thumbsUp': updateSpray(dt, hp); break;
+    case 'vortex': updateVortex(dt, hp); break;
+    case 'ripple': updateRipple(dt, hp); break;
+    case 'helix': updateHelix(dt, hp); break;
     case 'drag': default: updateDrag(dt, hp); break;
   }
 
@@ -253,33 +274,91 @@ function updateDualStream(dt, hp, gi) {
   }
 }
 
-function updateSpray(dt, hp) {
+function updateVortex(dt, hp) {
   for (let i = 0; i < PARTICLE_COUNT; i++) {
     const i3 = i * 3;
     const pd = particleData[i];
 
-    pd.sprayLife += dt;
+    pd.orbitAngle += (0.8 + pd.orbitSpeed * 1.5) * dt;
+    pd.orbitY += dt * 60; // rise upward
+    if (pd.orbitY > 400) pd.orbitY -= 400;
 
-    if (pd.sprayLife > 1.5 + pd.delay) {
-      // Respawn at hand position
-      pd.sprayLife = 0;
-      positions[i3] = hp.x + (Math.random() - 0.5) * 30;
-      positions[i3 + 1] = hp.y;
-      positions[i3 + 2] = hp.z;
-      velocities[i3] = (Math.random() - 0.5) * 30;
-      velocities[i3 + 1] = -100 - Math.random() * 200; // upward
-      velocities[i3 + 2] = (Math.random() - 0.5) * 30;
-    }
+    const radius = pd.orbitRadius * (1 - pd.orbitY / 500); // narrower at top
+    const tx = hp.x + Math.cos(pd.orbitAngle) * radius;
+    const ty = hp.y + pd.orbitY - 200;
+    const tz = hp.z + Math.sin(pd.orbitAngle) * radius;
 
-    positions[i3] += velocities[i3] * dt;
-    positions[i3 + 1] += velocities[i3 + 1] * dt;
-    positions[i3 + 2] += velocities[i3 + 2] * dt;
+    lerpPosition(i3, tx, ty, tz, 0.06);
 
-    // Fade with height
-    const fade = Math.max(0, 1 - pd.sprayLife / 2);
-    const targetR = 0.9 * fade;
-    const targetG = 0.7 * fade;
-    const targetB = 0.2 * fade;
+    // Deep purple at base → cyan at top
+    const t = pd.orbitY / 400;
+    const targetR = 0.3 + t * 0.4;
+    const targetG = 0.1 + t * 0.7;
+    const targetB = 0.7 * (1 - t) + 0.5 * t;
+    colors[i3] = previousColors[i3] + (targetR - previousColors[i3]) * transitionProgress;
+    colors[i3 + 1] = previousColors[i3 + 1] + (targetG - previousColors[i3 + 1]) * transitionProgress;
+    colors[i3 + 2] = previousColors[i3 + 2] + (targetB - previousColors[i3 + 2]) * transitionProgress;
+  }
+}
+
+function updateRipple(dt, hp) {
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    const i3 = i * 3;
+    const pd = particleData[i];
+
+    pd.delay += dt;
+    const phase = pd.delay % 2.5; // cycle every 2.5s
+
+    // Expanding ring radius
+    const ringRadius = 30 + phase * 120;
+    const rings = 5;
+    const ringIndex = i % rings;
+    const angle = (i / PARTICLE_COUNT) * Math.PI * 2 * rings + phase * 3;
+
+    const spread = 20 + ringIndex * 8;
+    const tx = hp.x + Math.cos(angle) * (ringRadius + (Math.random() - 0.5) * spread);
+    const ty = hp.y + (Math.random() - 0.5) * 40 + ringIndex * 15;
+    const tz = hp.z + Math.sin(angle) * (ringRadius + (Math.random() - 0.5) * spread);
+
+    lerpPosition(i3, tx, ty, tz, 0.08);
+
+    // Teal/cyan rings with brightness proportional to phase
+    const bright = phase < 0.3 ? 1 : Math.max(0.3, 1 - phase / 2.5);
+    const targetR = 0.2 * bright;
+    const targetG = 0.6 * bright;
+    const targetB = 0.7 * bright;
+    colors[i3] = previousColors[i3] + (targetR - previousColors[i3]) * transitionProgress;
+    colors[i3 + 1] = previousColors[i3 + 1] + (targetG - previousColors[i3 + 1]) * transitionProgress;
+    colors[i3 + 2] = previousColors[i3 + 2] + (targetB - previousColors[i3 + 2]) * transitionProgress;
+  }
+}
+
+function updateHelix(dt, hp) {
+  const half = PARTICLE_COUNT / 2;
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    const i3 = i * 3;
+    const pd = particleData[i];
+    const isStrandA = i < half;
+
+    pd.orbitAngle += (1.5 + pd.orbitSpeed) * dt;
+    pd.orbitY += dt * 80;
+    if (pd.orbitY > 300) pd.orbitY -= 300;
+
+    const phaseOffset = isStrandA ? 0 : Math.PI;
+    const radius = 40 + pd.orbitRadius * 0.5;
+    const angle = pd.orbitAngle + phaseOffset;
+
+    const tx = hp.x + Math.cos(angle) * radius;
+    const ty = hp.y + pd.orbitY - 150;
+    const tz = hp.z + Math.sin(angle) * radius;
+
+    lerpPosition(i3, tx, ty, tz, 0.06);
+
+    // Strand A: gold, Strand B: rose
+    const targetR = isStrandA ? 0.9 : 0.8;
+    const targetG = isStrandA ? 0.7 : 0.2;
+    const targetB = isStrandA ? 0.1 : 0.5;
     colors[i3] = previousColors[i3] + (targetR - previousColors[i3]) * transitionProgress;
     colors[i3 + 1] = previousColors[i3 + 1] + (targetG - previousColors[i3 + 1]) * transitionProgress;
     colors[i3 + 2] = previousColors[i3 + 2] + (targetB - previousColors[i3 + 2]) * transitionProgress;
@@ -291,24 +370,42 @@ function updateDrag(dt, hp) {
     const i3 = i * 3;
     const pd = particleData[i];
 
-    // Store offset on first contact
-    if (!pd.offsetCaptured) {
-      pd.dragOffsetX = positions[i3] - hp.x;
-      pd.dragOffsetY = positions[i3 + 1] - hp.y;
-      pd.dragOffsetZ = positions[i3 + 2] - hp.z;
-      pd.offsetCaptured = true;
+    // Assign particles to trail positions — front 30% follow hand, rest trail behind
+    let trailIdx;
+    if (i < PARTICLE_COUNT * 0.3) {
+      trailIdx = 0;
+    } else {
+      const t = (i - PARTICLE_COUNT * 0.3) / (PARTICLE_COUNT * 0.7);
+      trailIdx = Math.floor(t * (handTrail.length - 1));
     }
 
-    // Inertial follow with delay
-    const tx = hp.x + pd.dragOffsetX;
-    const ty = hp.y + pd.dragOffsetY;
-    const tz = hp.z + pd.dragOffsetZ;
+    const target = handTrail[Math.min(trailIdx, handTrail.length - 1)] || hp;
 
-    lerpPosition(i3, tx, ty, tz, 0.02);
+    if (!pd.offsetCaptured) {
+      pd.dragOffsetX = positions[i3] - target.x;
+      pd.dragOffsetY = positions[i3 + 1] - target.y;
+      pd.dragOffsetZ = positions[i3 + 2] - target.z;
+      if (i < PARTICLE_COUNT - 1) pd.offsetCaptured = true; // capture gradually
+    }
 
-    const targetR = 0.5;
-    const targetG = 0.3;
-    const targetB = 0.7;
+    // Trail particles have wider spread (wave-like)
+    const trailFactor = trailIdx / Math.max(handTrail.length, 1);
+    const spreadX = trailFactor * 60 * Math.sin(i * 0.1 + trailIdx * 0.5);
+    const spreadY = trailFactor * 40 * Math.cos(i * 0.13 + trailIdx * 0.4);
+    const spreadZ = trailFactor * 50;
+
+    const tx = target.x + pd.dragOffsetX + spreadX;
+    const ty = target.y + pd.dragOffsetY + spreadY;
+    const tz = target.z + pd.dragOffsetZ + spreadZ;
+
+    // Front particles follow quickly, trail particles lag
+    const lerpFactor = trailIdx === 0 ? 0.04 : 0.015;
+    lerpPosition(i3, tx, ty, tz, lerpFactor);
+
+    // Bright at front, dim and blue at tail
+    const targetR = 0.5 * (1 - trailFactor * 0.6);
+    const targetG = 0.3 * (1 - trailFactor * 0.7);
+    const targetB = 0.5 + 0.5 * trailFactor;
     colors[i3] = previousColors[i3] + (targetR - previousColors[i3]) * transitionProgress;
     colors[i3 + 1] = previousColors[i3 + 1] + (targetG - previousColors[i3 + 1]) * transitionProgress;
     colors[i3 + 2] = previousColors[i3 + 2] + (targetB - previousColors[i3 + 2]) * transitionProgress;

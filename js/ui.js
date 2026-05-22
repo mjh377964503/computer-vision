@@ -2,8 +2,10 @@ const GESTURE_LABELS = {
   orbit: '旋转星云',
   collapse: '聚拢炸裂',
   peace: '双股粒子流',
-  thumbsUp: '向上喷射',
-  drag: '拖拽云团',
+  vortex: '漩涡龙卷',
+  ripple: '涟漪波纹',
+  helix: '螺旋基因',
+  drag: '海浪拖尾',
 };
 
 export function updateGestureLabel(gesture) {
