@@ -49,7 +49,9 @@ async function main() {
     const results = handLandmarkerInstance.detectForVideo(video, nowMs);
 
     if (results.landmarks && results.landmarks.length > 0) {
-      const gestureInfo = updateGesture(results.landmarks[0]);
+      // Mirror landmarks horizontally to match mirrored PIP video
+      const landmarks = results.landmarks[0].map(l => ({ ...l, x: 1 - l.x }));
+      const gestureInfo = updateGesture(landmarks);
       updateParticles(gestureInfo);
       updateGestureLabel(gestureInfo.gesture);
     } else {
